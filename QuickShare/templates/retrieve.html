@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Retrieve — QuickShare</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body>
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-glow" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <a href="/" class="brand" data-testid="brand-link">
+      <span class="brand-mark">Q</span>
+      <span class="brand-name">QuickShare</span>
+    </a>
+    <nav class="topnav">
+      <a href="/share" class="nav-link" data-testid="nav-share">Share</a>
+      <a href="/retrieve" class="nav-link active" data-testid="nav-retrieve">Retrieve</a>
+    </nav>
+  </header>
+
+  <main class="page">
+    <div class="page-head reveal">
+      <h1 class="page-title">Retrieve with Code</h1>
+      <p class="page-sub">Enter the 6-digit code shown on the other device.</p>
+    </div>
+
+    <section class="card panel reveal" data-testid="panel-retrieve">
+      <label class="field-label" for="code-input">6-digit code</label>
+      <input id="code-input" class="code-input" inputmode="numeric" maxlength="6"
+        placeholder="000000" autocomplete="off" data-testid="code-input" />
+      <div class="row-end">
+        <button class="btn primary" id="btn-retrieve" data-testid="retrieve-button">Retrieve</button>
+      </div>
+    </section>
+
+    <!-- ===================== RETRIEVED TEXT ===================== -->
+    <section class="card result-content hidden" id="text-result" data-testid="text-result">
+      <div class="rc-head">
+        <span class="rc-tag">Text</span>
+        <button class="btn ghost small" id="btn-copy-text" data-testid="copy-text-button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <span>Copy</span>
+        </button>
+      </div>
+      <pre class="text-content" id="retrieved-text" data-testid="retrieved-text"></pre>
+    </section>
+
+    <!-- ===================== RETRIEVED FILE ===================== -->
+    <section class="card result-content hidden" id="file-result" data-testid="file-result">
+      <div class="file-card">
+        <div class="file-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+        </div>
+        <div class="file-meta">
+          <span class="file-name" id="file-name" data-testid="retrieved-file-name"></span>
+          <span class="file-size" id="file-size" data-testid="retrieved-file-size"></span>
+        </div>
+      </div>
+      <a class="btn primary block" id="btn-download" data-testid="download-button" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+        <span>Download file</span>
+      </a>
+    </section>
+
+    <!-- ===================== ERROR ===================== -->
+    <section class="card error-card hidden" id="error-result" data-testid="error-result">
+      <div class="err-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+      </div>
+      <p class="err-text" id="error-text" data-testid="error-text"></p>
+    </section>
+
+    <p class="disclaimer">For trusted local networks only. Shares expire automatically.</p>
+  </main>
+
+  <div id="toast" class="toast" data-testid="toast"></div>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

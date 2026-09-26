@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Share — QuickShare</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body>
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-glow" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <a href="/" class="brand" data-testid="brand-link">
+      <span class="brand-mark">Q</span>
+      <span class="brand-name">QuickShare</span>
+    </a>
+    <nav class="topnav">
+      <a href="/share" class="nav-link active" data-testid="nav-share">Share</a>
+      <a href="/retrieve" class="nav-link" data-testid="nav-retrieve">Retrieve</a>
+    </nav>
+  </header>
+
+  <main class="page">
+    <div class="page-head reveal">
+      <h1 class="page-title">Share Something</h1>
+      <p class="page-sub">Codes auto-expire after {{ expiry }} minutes · Max file size {{ max_mb }} MB</p>
+    </div>
+
+    <div class="tabs reveal" role="tablist">
+      <button class="tab active" data-tab="text" data-testid="tab-text" role="tab">Text</button>
+      <button class="tab" data-tab="file" data-testid="tab-file" role="tab">File</button>
+    </div>
+
+    <!-- ===================== TEXT PANEL ===================== -->
+    <section class="card panel reveal" id="panel-text" data-testid="panel-text">
+      <label class="field-label" for="text-input">Your text</label>
+      <textarea id="text-input" class="textarea" rows="8"
+        placeholder="Paste or type the text you want to send to the other device…"
+        data-testid="text-input"></textarea>
+      <div class="row-between">
+        <span class="hint" id="char-count" data-testid="char-count">0 characters</span>
+        <button class="btn primary" id="btn-share-text" data-testid="generate-text-code-button">
+          Generate Share Code
+        </button>
+      </div>
+    </section>
+
+    <!-- ===================== FILE PANEL ===================== -->
+    <section class="card panel hidden" id="panel-file" data-testid="panel-file">
+      <div class="dropzone" id="dropzone" data-testid="dropzone">
+        <input type="file" id="file-input" class="file-input" data-testid="file-input" />
+        <div class="dz-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+        </div>
+        <p class="dz-title">Drag &amp; drop a file here</p>
+        <p class="dz-sub">or <span class="dz-browse">browse</span> to choose · up to {{ max_mb }} MB</p>
+        <div class="dz-selected hidden" id="dz-selected" data-testid="file-selected">
+          <span class="dz-file-name" id="dz-file-name"></span>
+          <span class="dz-file-size" id="dz-file-size"></span>
+        </div>
+      </div>
+
+      <div class="progress hidden" id="upload-progress" data-testid="upload-progress">
+        <div class="progress-bar" id="upload-bar"></div>
+      </div>
+
+      <div class="row-end">
+        <button class="btn primary" id="btn-share-file" data-testid="generate-file-code-button" disabled>
+          Upload &amp; Generate Code
+        </button>
+      </div>
+    </section>
+
+    <!-- ===================== RESULT ===================== -->
+    <section class="card result hidden" id="result" data-testid="result-card">
+      <p class="result-label">Share this code with the other device</p>
+      <div class="code-display" id="code-display" data-testid="share-code">------</div>
+      <button class="btn ghost copy" id="btn-copy" data-testid="copy-code-button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        <span>Copy code</span>
+      </button>
+      <p class="result-meta" id="result-meta" data-testid="result-meta"></p>
+      <p class="result-expiry" id="result-expiry" data-testid="result-expiry"></p>
+      <button class="btn link" id="btn-new-share" data-testid="new-share-button">Share another →</button>
+    </section>
+
+    <p class="disclaimer">
+      For trusted local networks only. QuickShare is a student project — not production-grade cloud storage.
+    </p>
+  </main>
+
+  <div id="toast" class="toast" data-testid="toast"></div>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

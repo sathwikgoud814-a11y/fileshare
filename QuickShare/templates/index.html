@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QuickShare — Local Text & File Sharing</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body>
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-glow" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <a href="/" class="brand" data-testid="brand-link">
+      <span class="brand-mark">Q</span>
+      <span class="brand-name">QuickShare</span>
+    </a>
+    <nav class="topnav">
+      <a href="/share" class="nav-link" data-testid="nav-share">Share</a>
+      <a href="/retrieve" class="nav-link" data-testid="nav-retrieve">Retrieve</a>
+    </nav>
+  </header>
+
+  <main class="hero">
+    <div class="hero-inner reveal">
+      <span class="pill" data-testid="hero-pill">Same Wi-Fi · No sign-up · Auto-expires</span>
+      <h1 class="hero-title">Share text &amp; files <span class="accent">instantly</span><br />across your local network.</h1>
+      <p class="hero-sub">
+        Paste text or drop a file on one device, get a 6-digit code, and pull it up on
+        another device on the same Wi-Fi. Fast, private, and gone in minutes.
+      </p>
+
+      <div class="choice-grid">
+        <a href="/share" class="choice-card" data-testid="choice-share">
+          <div class="choice-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
+          </div>
+          <h2>Share Something</h2>
+          <p>Send text or upload a file and get a code to hand over.</p>
+          <span class="choice-go">Start sharing →</span>
+        </a>
+
+        <a href="/retrieve" class="choice-card alt" data-testid="choice-retrieve">
+          <div class="choice-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+          </div>
+          <h2>Retrieve with Code</h2>
+          <p>Enter the 6-digit code to view text or download the file.</p>
+          <span class="choice-go">Enter a code →</span>
+        </a>
+      </div>
+
+      <div class="how">
+        <div class="how-step"><span class="how-num">1</span><p>Paste text or pick a file</p></div>
+        <div class="how-arrow">→</div>
+        <div class="how-step"><span class="how-num">2</span><p>Get a 6-digit code</p></div>
+        <div class="how-arrow">→</div>
+        <div class="how-step"><span class="how-num">3</span><p>Enter it on the other device</p></div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <p>Built for a Computer Networks lab · Flask + SQLite over HTTP/TCP · For trusted local networks only.</p>
+  </footer>
+
+  <div id="toast" class="toast" data-testid="toast"></div>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
