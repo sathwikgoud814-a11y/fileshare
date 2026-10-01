@@ -106,16 +106,41 @@ def add_cors_headers(response):
     return response
 
 
+def get_request_base_url():
+    """Determine the best public / accessible base URL for links and QR codes."""
+    try:
+        host = request.host.split(":")[0]
+        if host not in ("localhost", "127.0.0.1", "0.0.0.0"):
+            # Deployed on a real domain (e.g. *.onrender.com) or accessed via direct LAN IP
+            proto = request.headers.get("X-Forwarded-Proto", request.scheme)
+            return f"{proto}://{request.host}".rstrip("/")
+    except Exception:
+        pass
+    if PUBLIC_TUNNEL_URL:
+        return PUBLIC_TUNNEL_URL
+    return f"http://{get_local_ip()}:{PORT}"
+
+
 @app.context_processor
 def inject_server_info():
     ip = get_local_ip()
     port = PORT
-    public_url = PUBLIC_TUNNEL_URL or f"http://{ip}:{port}"
+    public_url = None
+    try:
+        host = request.host.split(":")[0]
+        if host not in ("localhost", "127.0.0.1", "0.0.0.0"):
+            proto = request.headers.get("X-Forwarded-Proto", request.scheme)
+            public_url = f"{proto}://{request.host}".rstrip("/")
+    except Exception:
+        pass
+    if not public_url:
+        public_url = PUBLIC_TUNNEL_URL or f"http://{ip}:{port}"
+
     return {
         "lan_ip": ip,
         "lan_url": f"http://{ip}:{port}",
         "public_url": public_url,
-        "has_public_url": bool(PUBLIC_TUNNEL_URL),
+        "has_public_url": bool(public_url),
         "server_port": port,
     }
 
@@ -326,18 +351,18 @@ def api_share_text():
     db.commit()
 
     ip = get_local_ip()
-    best_base = PUBLIC_TUNNEL_URL or f"http://{ip}:{PORT}"
+    best_base = get_request_base_url()
     return jsonify(
         code=code,
         type="text",
         expires_at=iso(expires),
         expires_in_minutes=EXPIRY_MINUTES,
         lan_url=f"http://{ip}:{PORT}",
-        public_url=PUBLIC_TUNNEL_URL,
+        public_url=best_base,
         retrieve_url=f"/retrieve?code={code}",
         direct_url=f"{best_base}/retrieve?code={code}",
         direct_lan_url=f"http://{ip}:{PORT}/retrieve?code={code}",
-        direct_public_url=f"{PUBLIC_TUNNEL_URL}/retrieve?code={code}" if PUBLIC_TUNNEL_URL else None,
+        direct_public_url=f"{best_base}/retrieve?code={code}",
     ), 201
 
 
@@ -394,7 +419,7 @@ def api_share_file():
     db.commit()
 
     ip = get_local_ip()
-    best_base = PUBLIC_TUNNEL_URL or f"http://{ip}:{PORT}"
+    best_base = get_request_base_url()
     return jsonify(
         code=code,
         type="file",
@@ -404,11 +429,11 @@ def api_share_file():
         expires_at=iso(expires),
         expires_in_minutes=EXPIRY_MINUTES,
         lan_url=f"http://{ip}:{PORT}",
-        public_url=PUBLIC_TUNNEL_URL,
+        public_url=best_base,
         retrieve_url=f"/retrieve?code={code}",
         direct_url=f"{best_base}/retrieve?code={code}",
         direct_lan_url=f"http://{ip}:{PORT}/retrieve?code={code}",
-        direct_public_url=f"{PUBLIC_TUNNEL_URL}/retrieve?code={code}" if PUBLIC_TUNNEL_URL else None,
+        direct_public_url=f"{best_base}/retrieve?code={code}",
     ), 201
 
 

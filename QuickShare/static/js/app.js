@@ -71,12 +71,20 @@ async function syncNetworkInfo() {
   } catch {}
 }
 
+function isCloudDomain() {
+  const hostname = window.location.hostname;
+  return Boolean(hostname && hostname !== "localhost" && hostname !== "127.0.0.1" && hostname !== "0.0.0.0" && !/^\d+\.\d+\.\d+\.\d+$/.test(hostname));
+}
+
 function getBaseUrl(mode = "public") {
+  // If hosted on a cloud domain (e.g. *.onrender.com, *.trycloudflare.com, etc.)
+  if (isCloudDomain()) {
+    return window.location.origin;
+  }
   if (mode === "lan") {
     return serverNetworkState.lanUrl || window.location.origin;
   }
-  // Public mode: use publicUrl if available, otherwise current origin / LAN
-  if (serverNetworkState.publicUrl && serverNetworkState.publicUrl !== "None") {
+  if (serverNetworkState.publicUrl && serverNetworkState.publicUrl !== "None" && !serverNetworkState.publicUrl.includes("127.0.0.1")) {
     return serverNetworkState.publicUrl;
   }
   const hostname = window.location.hostname;
@@ -145,9 +153,13 @@ function initMobileModal() {
     if (lanUrlEl) lanUrlEl.textContent = url;
     if (qrBox) renderQr(qrBox, url, 150);
     if (hintText) {
-      hintText.textContent = currentMode === "public"
-        ? "🌐 Cross-network public URL (works on 4G/5G and any Wi-Fi)"
-        : "📶 Local Wi-Fi address (devices must be on the same Wi-Fi)";
+      if (isCloudDomain()) {
+        hintText.textContent = "🌐 24/7 Cloud Hosted · Connect from any network";
+      } else {
+        hintText.textContent = currentMode === "public"
+          ? "🌐 Cross-network public URL (works on 4G/5G and any Wi-Fi)"
+          : "📶 Local Wi-Fi address (devices must be on the same Wi-Fi)";
+      }
     }
   }
 
@@ -155,18 +167,23 @@ function initMobileModal() {
     await syncNetworkInfo();
     modal.classList.remove("hidden");
     
-    // Set active pill
     if (modalToggle) {
-      const publicBtn = $("#btn-modal-net-public");
-      const lanBtn = $("#btn-modal-net-lan");
-      if (serverNetworkState.publicUrl) {
+      if (isCloudDomain()) {
+        modalToggle.classList.add("hidden");
         currentMode = "public";
-        if (publicBtn) publicBtn.classList.add("active");
-        if (lanBtn) lanBtn.classList.remove("active");
       } else {
-        currentMode = "lan";
-        if (lanBtn) lanBtn.classList.add("active");
-        if (publicBtn) publicBtn.classList.remove("active");
+        modalToggle.classList.remove("hidden");
+        const publicBtn = $("#btn-modal-net-public");
+        const lanBtn = $("#btn-modal-net-lan");
+        if (serverNetworkState.publicUrl) {
+          currentMode = "public";
+          if (publicBtn) publicBtn.classList.add("active");
+          if (lanBtn) lanBtn.classList.remove("active");
+        } else {
+          currentMode = "lan";
+          if (lanBtn) lanBtn.classList.add("active");
+          if (publicBtn) publicBtn.classList.remove("active");
+        }
       }
     }
     refreshModalView();
@@ -380,11 +397,16 @@ function initSharePage() {
       : "Text ready to retrieve";
 
     // Set default mode
-    currentNetworkMode = serverNetworkState.publicUrl ? "public" : "lan";
+    currentNetworkMode = isCloudDomain() ? "public" : (serverNetworkState.publicUrl ? "public" : "lan");
     if (netToggle) {
-      netToggle.querySelectorAll(".net-pill").forEach((p) => {
-        p.classList.toggle("active", p.dataset.mode === currentNetworkMode);
-      });
+      if (isCloudDomain()) {
+        netToggle.classList.add("hidden");
+      } else {
+        netToggle.classList.remove("hidden");
+        netToggle.querySelectorAll(".net-pill").forEach((p) => {
+          p.classList.toggle("active", p.dataset.mode === currentNetworkMode);
+        });
+      }
     }
 
     updateQrDisplay();
