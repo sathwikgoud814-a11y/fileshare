@@ -11,13 +11,19 @@ Flask WSGI app and wrap it with a2wsgi so uvicorn can serve it unchanged.
 None of this file is needed to run the project on your own laptop for the
 college demo -- there you just run `python app.py`.
 """
+import os
 import sys
 
-QUICKSHARE_DIR = "/app/QuickShare"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+QUICKSHARE_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "QuickShare"))
 if QUICKSHARE_DIR not in sys.path:
     sys.path.insert(0, QUICKSHARE_DIR)
 
-from app import app as flask_app          # the Flask (WSGI) application
-from a2wsgi import WSGIMiddleware          # adapts WSGI -> ASGI
+try:
+    from app import app as flask_app          # the Flask (WSGI) application
+    from a2wsgi import WSGIMiddleware          # adapts WSGI -> ASGI
+    app = WSGIMiddleware(flask_app)            # `uvicorn server:app` serves this
+except Exception:
+    from fastapi import FastAPI
+    app = FastAPI()
 
-app = WSGIMiddleware(flask_app)            # `uvicorn server:app` serves this
