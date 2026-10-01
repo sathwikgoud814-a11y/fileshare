@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-lan-url="{{ lan_url }}" data-lan-ip="{{ lan_ip }}" data-public-url="{{ public_url }}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -22,20 +22,35 @@
     <nav class="topnav">
       <a href="/share" class="nav-link" data-testid="nav-share">Share</a>
       <a href="/retrieve" class="nav-link active" data-testid="nav-retrieve">Retrieve</a>
+      <button class="btn ghost small nav-mobile-btn" id="btn-open-mobile-modal" data-testid="btn-connect-mobile" title="Connect your mobile phone via QR code">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+          <path d="M12 18h.01"/>
+        </svg>
+        <span>Connect Phone</span>
+      </button>
     </nav>
   </header>
 
   <main class="page">
     <div class="page-head reveal">
-      <h1 class="page-title">Retrieve with Code</h1>
-      <p class="page-sub">Enter the 6-digit code shown on the other device.</p>
+      <h1 class="page-title">Retrieve with Code or QR</h1>
+      <p class="page-sub">Enter the 6-digit code or scan the QR code from the sender.</p>
     </div>
 
     <section class="card panel reveal" data-testid="panel-retrieve">
-      <label class="field-label" for="code-input">6-digit code</label>
+      <label class="field-label" for="code-input">6-digit share code</label>
       <input id="code-input" class="code-input" inputmode="numeric" maxlength="6"
-        placeholder="000000" autocomplete="off" data-testid="code-input" />
-      <div class="row-end">
+        placeholder="000000" autocomplete="off" data-testid="code-input" value="{{ prefill_code or '' }}" />
+      
+      <div class="retrieve-actions-row">
+        <button class="btn ghost" id="btn-scan-qr" data-testid="scan-qr-button" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          <span>Scan Camera QR</span>
+        </button>
         <button class="btn primary" id="btn-retrieve" data-testid="retrieve-button">Retrieve</button>
       </div>
     </section>
@@ -77,10 +92,60 @@
       <p class="err-text" id="error-text" data-testid="error-text"></p>
     </section>
 
-    <p class="disclaimer">For trusted local networks only. Shares expire automatically.</p>
+    <p class="disclaimer">QuickShare auto-expires shares after 10 minutes.</p>
   </main>
 
+  <!-- QR Scanner Modal -->
+  <div id="scanner-modal" class="modal-backdrop hidden" data-testid="scanner-modal">
+    <div class="modal-card">
+      <button class="modal-close" id="btn-close-scanner" aria-label="Close scanner">&times;</button>
+      <div class="choice-icon" style="margin: 0 auto 10px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+      </div>
+      <h3 class="modal-title">Scan QR Code</h3>
+      <p class="modal-sub">Point your camera at the QR code displayed on the sender's screen.</p>
+      
+      <div class="scanner-container">
+        <div id="qr-reader"></div>
+        <div class="scanner-overlay">
+          <div class="scanner-laser"></div>
+        </div>
+      </div>
+      <p class="scanner-help">Position the QR code inside the frame to scan automatically.</p>
+    </div>
+  </div>
+
+  <!-- Mobile Connect Modal -->
+  <div id="mobile-modal" class="modal-backdrop hidden" data-testid="mobile-modal">
+    <div class="modal-card">
+      <button class="modal-close" id="btn-close-mobile-modal" aria-label="Close modal">&times;</button>
+      <div class="choice-icon" style="margin: 0 auto 12px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
+      </div>
+      <h3 class="modal-title">Connect Your Phone</h3>
+      <p class="modal-sub">Scan this QR code with your phone camera to access QuickShare from anywhere.</p>
+      
+      <div class="network-pills" id="modal-net-toggle">
+        <button class="net-pill active" data-mode="public" id="btn-modal-net-public" type="button">🌐 Cross-Network</button>
+        <button class="net-pill" data-mode="lan" id="btn-modal-net-lan" type="button">📶 Local Wi-Fi</button>
+      </div>
+
+      <div class="qr-badge" id="mobile-connect-qr"></div>
+      
+      <div class="url-pill-box">
+        <span class="url-pill-text" id="mobile-lan-url">{{ public_url or lan_url }}</span>
+        <button class="btn ghost small" id="btn-copy-lan-url" style="padding: 4px 10px; font-size: 12px;">Copy</button>
+      </div>
+      <p class="hint" style="margin-top: 10px;" id="network-hint-text">Cross-network public URL enabled</p>
+    </div>
+  </div>
+
   <div id="toast" class="toast" data-testid="toast"></div>
+  <script src="{{ url_for('static', filename='js/qrcode.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/html5-qrcode.min.js') }}"></script>
   <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>

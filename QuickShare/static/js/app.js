@@ -1,17 +1,15 @@
 /* ================================================================
    QuickShare — client-side logic (vanilla JavaScript, no frameworks)
    ----------------------------------------------------------------
-   Every fetch() below is an HTTP request from this CLIENT (the browser)
-   to the Flask SERVER. The server replies with JSON, which we render.
-   That request/response exchange travels over TCP/IP on the LAN.
+   Works over both local Wi-Fi / LAN and cross-network (Internet).
    ================================================================ */
 
-// All API calls are made to the SAME origin (relative URLs), so QuickShare
-// works no matter which IP/host the page was opened from on the network.
 const API = {
   shareText: "/api/share/text",
   shareFile: "/api/share/file",
   retrieve: "/api/retrieve",
+  network: "/api/network",
+  info: "/api/info",
 };
 
 /* ---------- small helpers ---------- */
@@ -31,7 +29,6 @@ async function copyText(text) {
     await navigator.clipboard.writeText(text);
     return true;
   } catch {
-    // Fallback for older browsers / non-HTTPS contexts.
     const ta = document.createElement("textarea");
     ta.value = text;
     ta.style.position = "fixed";
@@ -58,6 +55,156 @@ function loading(btn, on) {
   else { if (btn.dataset.label) btn.innerHTML = btn.dataset.label; btn.classList.remove("is-loading"); btn.disabled = false; }
 }
 
+let serverNetworkState = {
+  lanUrl: document.documentElement.dataset.lanUrl || "",
+  publicUrl: document.documentElement.dataset.publicUrl || "",
+};
+
+async function syncNetworkInfo() {
+  try {
+    const res = await fetch(API.network);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.lan_url) serverNetworkState.lanUrl = data.lan_url;
+      if (data.public_url) serverNetworkState.publicUrl = data.public_url;
+    }
+  } catch {}
+}
+
+function getBaseUrl(mode = "public") {
+  if (mode === "lan") {
+    return serverNetworkState.lanUrl || window.location.origin;
+  }
+  // Public mode: use publicUrl if available, otherwise current origin / LAN
+  if (serverNetworkState.publicUrl && serverNetworkState.publicUrl !== "None") {
+    return serverNetworkState.publicUrl;
+  }
+  const hostname = window.location.hostname;
+  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0" || !hostname) {
+    return serverNetworkState.lanUrl || window.location.origin;
+  }
+  return window.location.origin;
+}
+
+/**
+ * Clean QR Code Renderer
+ * Ensures only ONE single, crisp QR image is displayed with correct dimensions.
+ */
+function renderQr(container, text, size = 150) {
+  if (typeof container === "string") container = $(container);
+  if (!container || typeof QRCode === "undefined") return;
+  
+  // Empty container completely before rendering
+  container.innerHTML = "";
+
+  try {
+    new QRCode(container, {
+      text: text,
+      width: size,
+      height: size,
+      colorDark: "#0a0e1f",
+      colorLight: "#ffffff",
+      correctLevel: QRCode.CorrectLevel.M,
+    });
+  } catch (err) {
+    console.error("QR render error:", err);
+  }
+}
+
+function extractCode(text) {
+  if (!text) return "";
+  const trimmed = text.trim();
+  if (/^\d{6}$/.test(trimmed)) return trimmed;
+  const codeParamMatch = trimmed.match(/[?&]code=(\d{6})/i);
+  if (codeParamMatch) return codeParamMatch[1];
+  const shortRouteMatch = trimmed.match(/\/[rq]\/(\d{6})/i);
+  if (shortRouteMatch) return shortRouteMatch[1];
+  const generalMatch = trimmed.match(/\b(\d{6})\b/);
+  return generalMatch ? generalMatch[1] : "";
+}
+
+/* ================================================================
+   MOBILE CONNECT MODAL
+   ================================================================ */
+function initMobileModal() {
+  const modal = $("#mobile-modal");
+  const openBtn = $("#btn-open-mobile-modal");
+  const closeBtn = $("#btn-close-mobile-modal");
+  const copyLanBtn = $("#btn-copy-lan-url");
+  const qrBox = $("#mobile-connect-qr");
+  const lanUrlEl = $("#mobile-lan-url");
+  const hintText = $("#network-hint-text");
+  const modalToggle = $("#modal-net-toggle");
+
+  if (!modal || !openBtn) return;
+
+  let currentMode = serverNetworkState.publicUrl ? "public" : "lan";
+
+  function refreshModalView() {
+    const url = getBaseUrl(currentMode);
+    if (lanUrlEl) lanUrlEl.textContent = url;
+    if (qrBox) renderQr(qrBox, url, 150);
+    if (hintText) {
+      hintText.textContent = currentMode === "public"
+        ? "🌐 Cross-network public URL (works on 4G/5G and any Wi-Fi)"
+        : "📶 Local Wi-Fi address (devices must be on the same Wi-Fi)";
+    }
+  }
+
+  const openModal = async () => {
+    await syncNetworkInfo();
+    modal.classList.remove("hidden");
+    
+    // Set active pill
+    if (modalToggle) {
+      const publicBtn = $("#btn-modal-net-public");
+      const lanBtn = $("#btn-modal-net-lan");
+      if (serverNetworkState.publicUrl) {
+        currentMode = "public";
+        if (publicBtn) publicBtn.classList.add("active");
+        if (lanBtn) lanBtn.classList.remove("active");
+      } else {
+        currentMode = "lan";
+        if (lanBtn) lanBtn.classList.add("active");
+        if (publicBtn) publicBtn.classList.remove("active");
+      }
+    }
+    refreshModalView();
+  };
+
+  const closeModal = () => modal.classList.add("hidden");
+
+  openBtn.addEventListener("click", openModal);
+  if (closeBtn) closeBtn.addEventListener("click", closeModal);
+
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) closeModal();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !modal.classList.contains("hidden")) closeModal();
+  });
+
+  if (modalToggle) {
+    modalToggle.querySelectorAll(".net-pill").forEach((pill) => {
+      pill.addEventListener("click", () => {
+        modalToggle.querySelectorAll(".net-pill").forEach((p) => p.classList.remove("active"));
+        pill.classList.add("active");
+        currentMode = pill.dataset.mode || "public";
+        refreshModalView();
+      });
+    });
+  }
+
+  if (copyLanBtn) {
+    copyLanBtn.addEventListener("click", async () => {
+      const url = getBaseUrl(currentMode);
+      const ok = await copyText(url);
+      toast(ok ? "URL copied to clipboard!" : "Failed to copy.", ok ? "success" : "error");
+    });
+  }
+}
+
 /* ================================================================
    SHARE PAGE
    ================================================================ */
@@ -67,7 +214,6 @@ function initSharePage() {
   const panelFile = $("#panel-file");
   if (!panelText || !panelFile) return;
 
-  // ----- tab switching -----
   tabs.forEach((tab) => {
     tab.addEventListener("click", () => {
       tabs.forEach((t) => t.classList.remove("active"));
@@ -79,21 +225,19 @@ function initSharePage() {
     });
   });
 
-  // ----- text character counter -----
   const textInput = $("#text-input");
   const charCount = $("#char-count");
   textInput.addEventListener("input", () => {
     charCount.textContent = `${textInput.value.length.toLocaleString()} characters`;
   });
 
-  // ----- share TEXT -----
+  // Share Text
   $("#btn-share-text").addEventListener("click", async () => {
     const text = textInput.value.trim();
     if (!text) { toast("Please enter some text first.", "error"); return; }
     const btn = $("#btn-share-text");
     loading(btn, true);
     try {
-      // HTTP POST -> server stores text and returns a 6-digit code (JSON).
       const res = await fetch(API.shareText, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -101,7 +245,7 @@ function initSharePage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Something went wrong.");
-      showResult(data, "Text shared! Use the code on the other device.");
+      showResult(data, "Text shared! Scan QR or use the code.");
     } catch (err) {
       toast(err.message, "error");
     } finally {
@@ -109,7 +253,7 @@ function initSharePage() {
     }
   });
 
-  // ----- file selection + drag & drop -----
+  // Share File
   const dropzone = $("#dropzone");
   const fileInput = $("#file-input");
   const dzSelected = $("#dz-selected");
@@ -129,7 +273,17 @@ function initSharePage() {
     }
   }
 
-  fileInput.addEventListener("change", () => setFile(fileInput.files[0]));
+  dropzone.addEventListener("click", (e) => {
+    if (e.target !== fileInput && !fileInput.contains(e.target)) {
+      fileInput.click();
+    }
+  });
+
+  fileInput.addEventListener("change", () => {
+    if (fileInput.files && fileInput.files[0]) {
+      setFile(fileInput.files[0]);
+    }
+  });
 
   ["dragenter", "dragover"].forEach((ev) =>
     dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.add("drag"); })
@@ -139,10 +293,12 @@ function initSharePage() {
   );
   dropzone.addEventListener("drop", (e) => {
     const file = e.dataTransfer.files && e.dataTransfer.files[0];
-    if (file) { fileInput.files = e.dataTransfer.files; setFile(file); }
+    if (file) {
+      try { fileInput.files = e.dataTransfer.files; } catch {}
+      setFile(file);
+    }
   });
 
-  // ----- share FILE (with upload progress) -----
   shareFileBtn.addEventListener("click", () => {
     if (!selectedFile) { toast("Please choose a file first.", "error"); return; }
 
@@ -152,46 +308,103 @@ function initSharePage() {
     bar.style.width = "0%";
     loading(shareFileBtn, true);
 
-    // XMLHttpRequest is used (instead of fetch) so we can show upload progress.
     const form = new FormData();
-    form.append("file", selectedFile);
+    form.append("file", selectedFile, selectedFile.name);
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", API.shareFile);
+    xhr.open("POST", API.shareFile, true);
+    xhr.timeout = 180000;
 
     xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) bar.style.width = Math.round((e.loaded / e.total) * 100) + "%";
+      if (e.lengthComputable) {
+        const percent = Math.round((e.loaded / e.total) * 100);
+        bar.style.width = percent + "%";
+      }
     };
     xhr.onload = () => {
       loading(shareFileBtn, false);
       progress.classList.add("hidden");
       let data = {};
       try { data = JSON.parse(xhr.responseText); } catch {}
-      if (xhr.status >= 200 && xhr.status < 300) {
-        showResult(data, "File uploaded! Use the code on the other device.");
+      if (xhr.status >= 200 && xhr.status < 300 && data.code) {
+        showResult(data, "File uploaded! Scan QR or use the code.");
       } else {
         toast(data.error || `Upload failed (HTTP ${xhr.status}).`, "error");
       }
     };
-    xhr.onerror = () => { loading(shareFileBtn, false); progress.classList.add("hidden"); toast("Network error during upload.", "error"); };
+    xhr.onerror = () => {
+      loading(shareFileBtn, false);
+      progress.classList.add("hidden");
+      toast("Upload failed. Please check network connection.", "error");
+    };
+    xhr.ontimeout = () => {
+      loading(shareFileBtn, false);
+      progress.classList.add("hidden");
+      toast("Upload timed out. Try a smaller file.", "error");
+    };
     xhr.send(form);
   });
 
-  // ----- result rendering -----
+  // Result Rendering
   const result = $("#result");
   const codeDisplay = $("#code-display");
   const resultMeta = $("#result-meta");
   const resultExpiry = $("#result-expiry");
+  const qrContainer = $("#share-qr-container");
+  const copyLinkBtn = $("#btn-copy-link");
+  const downloadQrBtn = $("#btn-download-qr");
+  const netToggle = $("#share-net-toggle");
   let countdownTimer = null;
+  let currentShareData = null;
+  let currentNetworkMode = "public";
+
+  function getShareUrl() {
+    if (!currentShareData) return "";
+    const base = getBaseUrl(currentNetworkMode);
+    return `${base}/retrieve?code=${currentShareData.code}`;
+  }
+
+  function updateQrDisplay() {
+    if (!currentShareData || !qrContainer) return;
+    const shareUrl = getShareUrl();
+    renderQr(qrContainer, shareUrl, 150);
+  }
 
   function showResult(data, msg) {
+    currentShareData = data;
+    if (data.public_url) serverNetworkState.publicUrl = data.public_url;
+    if (data.lan_url) serverNetworkState.lanUrl = data.lan_url;
+
     codeDisplay.textContent = data.code;
     resultMeta.textContent = data.type === "file"
       ? `${data.filename} · ${data.filesize_human}`
       : "Text ready to retrieve";
+
+    // Set default mode
+    currentNetworkMode = serverNetworkState.publicUrl ? "public" : "lan";
+    if (netToggle) {
+      netToggle.querySelectorAll(".net-pill").forEach((p) => {
+        p.classList.toggle("active", p.dataset.mode === currentNetworkMode);
+      });
+    }
+
+    updateQrDisplay();
+
     result.classList.remove("hidden");
     result.scrollIntoView({ behavior: "smooth", block: "center" });
     toast(msg, "success");
     startCountdown(data.expires_at);
+  }
+
+  if (netToggle) {
+    netToggle.querySelectorAll(".net-pill").forEach((pill) => {
+      pill.addEventListener("click", () => {
+        netToggle.querySelectorAll(".net-pill").forEach((p) => p.classList.remove("active"));
+        pill.classList.add("active");
+        currentNetworkMode = pill.dataset.mode || "public";
+        updateQrDisplay();
+        toast(currentNetworkMode === "public" ? "Switched to Cross-Network QR (Internet)" : "Switched to Local Wi-Fi QR", "success");
+      });
+    });
   }
 
   function startCountdown(expiresAt) {
@@ -200,7 +413,7 @@ function initSharePage() {
     const tick = () => {
       const left = end - Date.now();
       if (left <= 0) {
-        resultExpiry.textContent = "This code has expired.";
+        resultExpiry.textContent = "This share has expired.";
         resultExpiry.classList.add("warn");
         clearInterval(countdownTimer);
         return;
@@ -219,13 +432,45 @@ function initSharePage() {
     clearInterval(countdownTimer);
   }
 
-  // ----- copy code -----
   $("#btn-copy").addEventListener("click", async () => {
     const ok = await copyText(codeDisplay.textContent);
     toast(ok ? "Code copied to clipboard!" : "Could not copy — copy it manually.", ok ? "success" : "error");
   });
 
-  // ----- share another -----
+  if (copyLinkBtn) {
+    copyLinkBtn.addEventListener("click", async () => {
+      const shareUrl = getShareUrl();
+      if (!shareUrl) return;
+      const ok = await copyText(shareUrl);
+      toast(ok ? "Share link copied to clipboard!" : "Failed to copy link.", ok ? "success" : "error");
+    });
+  }
+
+  if (downloadQrBtn) {
+    downloadQrBtn.addEventListener("click", () => {
+      const img = qrContainer ? qrContainer.querySelector("img") : null;
+      const canvas = qrContainer ? qrContainer.querySelector("canvas") : null;
+      let dataUrl = "";
+      if (img && img.src) {
+        dataUrl = img.src;
+      } else if (canvas) {
+        dataUrl = canvas.toDataURL("image/png");
+      }
+
+      if (dataUrl) {
+        const link = document.createElement("a");
+        link.download = `quickshare-${codeDisplay.textContent}-qr.png`;
+        link.href = dataUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast("QR code image saved!", "success");
+      } else {
+        toast("QR Code not ready.", "error");
+      }
+    });
+  }
+
   $("#btn-new-share").addEventListener("click", () => {
     hideResult();
     textInput.value = "";
@@ -237,7 +482,7 @@ function initSharePage() {
 }
 
 /* ================================================================
-   RETRIEVE PAGE
+   RETRIEVE PAGE & CAMERA QR SCANNER
    ================================================================ */
 function initRetrievePage() {
   const codeInput = $("#code-input");
@@ -247,8 +492,12 @@ function initRetrievePage() {
   const textResult = $("#text-result");
   const fileResult = $("#file-result");
   const errorResult = $("#error-result");
+  const scanQrBtn = $("#btn-scan-qr");
+  const scannerModal = $("#scanner-modal");
+  const closeScannerBtn = $("#btn-close-scanner");
 
-  // keep the input to digits only
+  let html5QrCodeScanner = null;
+
   codeInput.addEventListener("input", () => {
     codeInput.value = codeInput.value.replace(/\D/g, "").slice(0, 6);
   });
@@ -267,12 +516,13 @@ function initRetrievePage() {
     errorResult.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
-  async function doRetrieve() {
-    const code = codeInput.value.trim();
+  async function doRetrieve(overrideCode) {
+    const code = (overrideCode || codeInput.value).trim();
     if (code.length !== 6) { toast("Enter the full 6-digit code.", "error"); return; }
+    if (codeInput.value !== code) codeInput.value = code;
+
     loading(retrieveBtn, true);
     try {
-      // HTTP POST with the code -> server looks it up and replies with JSON.
       const res = await fetch(API.retrieve, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -290,32 +540,100 @@ function initRetrievePage() {
       } else {
         $("#file-name").textContent = data.filename;
         $("#file-size").textContent = data.filesize_human;
-        // Download link points at the server route that streams the file.
         $("#btn-download").setAttribute("href", data.download_url);
         fileResult.classList.remove("hidden");
         fileResult.scrollIntoView({ behavior: "smooth", block: "center" });
         toast("File found! Tap download.", "success");
       }
     } catch (err) {
-      showError("Network error — is the server still running on this Wi-Fi?");
+      showError("Network error — please check your internet or Wi-Fi connection.");
     } finally {
       loading(retrieveBtn, false);
     }
   }
 
-  retrieveBtn.addEventListener("click", doRetrieve);
+  retrieveBtn.addEventListener("click", () => doRetrieve());
 
-  // copy retrieved text
   $("#btn-copy-text").addEventListener("click", async () => {
     const ok = await copyText($("#retrieved-text").textContent);
     toast(ok ? "Copied!" : "Could not copy.", ok ? "success" : "error");
   });
 
   $("#btn-download").addEventListener("click", () => toast("Downloading…", "success"));
+
+  // Camera QR Scanner Modal Logic
+  async function startScanner() {
+    if (typeof Html5Qrcode === "undefined") {
+      toast("Scanner loading...", "error");
+      return;
+    }
+    scannerModal.classList.remove("hidden");
+
+    try {
+      html5QrCodeScanner = new Html5Qrcode("qr-reader");
+      const config = { fps: 10, qrbox: { width: 220, height: 220 } };
+
+      await html5QrCodeScanner.start(
+        { facingMode: "environment" },
+        config,
+        (decodedText) => {
+          const code = extractCode(decodedText);
+          if (code && code.length === 6) {
+            stopScanner();
+            toast(`QR Scanned: Code ${code}`, "success");
+            codeInput.value = code;
+            doRetrieve(code);
+          } else {
+            toast("Scanned QR is not a valid QuickShare code.", "error");
+          }
+        },
+        () => {}
+      );
+    } catch (err) {
+      console.error("Camera scanner error:", err);
+      toast("Could not access camera. Please check permissions.", "error");
+      stopScanner();
+    }
+  }
+
+  function stopScanner() {
+    if (html5QrCodeScanner) {
+      html5QrCodeScanner.stop().then(() => {
+        html5QrCodeScanner.clear();
+        html5QrCodeScanner = null;
+      }).catch(() => {
+        html5QrCodeScanner = null;
+      });
+    }
+    scannerModal.classList.add("hidden");
+  }
+
+  if (scanQrBtn && scannerModal) {
+    scanQrBtn.addEventListener("click", startScanner);
+    if (closeScannerBtn) closeScannerBtn.addEventListener("click", stopScanner);
+
+    scannerModal.addEventListener("click", (e) => {
+      if (e.target === scannerModal) stopScanner();
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !scannerModal.classList.contains("hidden")) stopScanner();
+    });
+  }
+
+  // Auto-retrieve if code is in URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const paramCode = urlParams.get("code") || codeInput.value;
+  if (paramCode && /^\d{6}$/.test(paramCode.trim())) {
+    codeInput.value = paramCode.trim();
+    doRetrieve(paramCode.trim());
+  }
 }
 
 /* ---------- boot ---------- */
 document.addEventListener("DOMContentLoaded", () => {
+  syncNetworkInfo();
+  initMobileModal();
   initSharePage();
   initRetrievePage();
 });

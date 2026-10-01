@@ -83,9 +83,10 @@ android-sdk/
 
 # overlay black-box crash/user-report dumps — session data, never history
 **/.emergent/recordings/
-.env
-.env.*
-*.env
-credentials.json
-*.key
-.credentials
+# QuickShare uploads and database
+QuickShare/uploads/*
+!QuickShare/uploads/.gitkeep
+QuickShare/database.db
+*.db
+*.sqlite
+*.sqlite3

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-lan-url="{{ lan_url }}" data-lan-ip="{{ lan_ip }}" data-public-url="{{ public_url }}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -22,13 +22,20 @@
     <nav class="topnav">
       <a href="/share" class="nav-link active" data-testid="nav-share">Share</a>
       <a href="/retrieve" class="nav-link" data-testid="nav-retrieve">Retrieve</a>
+      <button class="btn ghost small nav-mobile-btn" id="btn-open-mobile-modal" data-testid="btn-connect-mobile" title="Connect your mobile phone via QR code">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+          <path d="M12 18h.01"/>
+        </svg>
+        <span>Connect Phone</span>
+      </button>
     </nav>
   </header>
 
   <main class="page">
     <div class="page-head reveal">
       <h1 class="page-title">Share Something</h1>
-      <p class="page-sub">Codes auto-expire after {{ expiry }} minutes · Max file size {{ max_mb }} MB</p>
+      <p class="page-sub">Works on local Wi-Fi &amp; cross-network (Internet / 4G / 5G) · Max size {{ max_mb }} MB</p>
     </div>
 
     <div class="tabs reveal" role="tablist">
@@ -40,12 +47,12 @@
     <section class="card panel reveal" id="panel-text" data-testid="panel-text">
       <label class="field-label" for="text-input">Your text</label>
       <textarea id="text-input" class="textarea" rows="8"
-        placeholder="Paste or type the text you want to send to the other device…"
+        placeholder="Paste or type the text you want to send to the other device or phone…"
         data-testid="text-input"></textarea>
       <div class="row-between">
         <span class="hint" id="char-count" data-testid="char-count">0 characters</span>
         <button class="btn primary" id="btn-share-text" data-testid="generate-text-code-button">
-          Generate Share Code
+          Generate Share Code &amp; QR
         </button>
       </div>
     </section>
@@ -71,30 +78,94 @@
 
       <div class="row-end">
         <button class="btn primary" id="btn-share-file" data-testid="generate-file-code-button" disabled>
-          Upload &amp; Generate Code
+          Upload &amp; Generate Code + QR
         </button>
       </div>
     </section>
 
     <!-- ===================== RESULT ===================== -->
     <section class="card result hidden" id="result" data-testid="result-card">
-      <p class="result-label">Share this code with the other device</p>
-      <div class="code-display" id="code-display" data-testid="share-code">------</div>
-      <button class="btn ghost copy" id="btn-copy" data-testid="copy-code-button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-        <span>Copy code</span>
-      </button>
-      <p class="result-meta" id="result-meta" data-testid="result-meta"></p>
-      <p class="result-expiry" id="result-expiry" data-testid="result-expiry"></p>
+      <div class="share-result-grid">
+        <!-- 6-digit Code Side -->
+        <div class="result-code-box">
+          <p class="result-label">6-digit retrieval code</p>
+          <div class="code-display" id="code-display" data-testid="share-code">------</div>
+          <button class="btn ghost small copy" id="btn-copy" data-testid="copy-code-button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span>Copy code</span>
+          </button>
+          <p class="result-meta" id="result-meta" data-testid="result-meta"></p>
+          <p class="result-expiry" id="result-expiry" data-testid="result-expiry"></p>
+        </div>
+
+        <!-- QR Code Side -->
+        <div class="result-qr-box">
+          <div class="qr-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7"></rect>
+              <rect x="14" y="3" width="7" height="7"></rect>
+              <rect x="14" y="14" width="7" height="7"></rect>
+              <rect x="3" y="14" width="7" height="7"></rect>
+            </svg>
+            <span>Scan with Mobile</span>
+          </div>
+          
+          <!-- Network Mode Switcher -->
+          <div class="network-pills" id="share-net-toggle" style="margin-top: 8px;">
+            <button class="net-pill active" data-mode="public" id="btn-net-public" type="button">🌐 Cross-Network</button>
+            <button class="net-pill" data-mode="lan" id="btn-net-lan" type="button">📶 Local Wi-Fi</button>
+          </div>
+          
+          <div class="qr-badge" id="share-qr-container" data-testid="share-qr-code"></div>
+
+          <div class="qr-actions">
+            <button class="btn ghost small" id="btn-copy-link" data-testid="copy-link-button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              <span>Copy Link</span>
+            </button>
+            <button class="btn ghost small" id="btn-download-qr" data-testid="download-qr-button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+              <span>Save QR</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <button class="btn link" id="btn-new-share" data-testid="new-share-button">Share another →</button>
     </section>
 
     <p class="disclaimer">
-      For trusted local networks only. QuickShare is a student project — not production-grade cloud storage.
+      QuickShare auto-expires files and text snippets. Transfers are encrypted and secure.
     </p>
   </main>
 
+  <!-- Mobile Connect Modal -->
+  <div id="mobile-modal" class="modal-backdrop hidden" data-testid="mobile-modal">
+    <div class="modal-card">
+      <button class="modal-close" id="btn-close-mobile-modal" aria-label="Close modal">&times;</button>
+      <div class="choice-icon" style="margin: 0 auto 12px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
+      </div>
+      <h3 class="modal-title">Connect Your Phone</h3>
+      <p class="modal-sub">Scan this QR code with your phone camera to access QuickShare from anywhere.</p>
+      
+      <div class="network-pills" id="modal-net-toggle">
+        <button class="net-pill active" data-mode="public" id="btn-modal-net-public" type="button">🌐 Cross-Network</button>
+        <button class="net-pill" data-mode="lan" id="btn-modal-net-lan" type="button">📶 Local Wi-Fi</button>
+      </div>
+
+      <div class="qr-badge" id="mobile-connect-qr"></div>
+      
+      <div class="url-pill-box">
+        <span class="url-pill-text" id="mobile-lan-url">{{ public_url or lan_url }}</span>
+        <button class="btn ghost small" id="btn-copy-lan-url" style="padding: 4px 10px; font-size: 12px;">Copy</button>
+      </div>
+      <p class="hint" style="margin-top: 10px;" id="network-hint-text">Cross-network public URL enabled</p>
+    </div>
+  </div>
+
   <div id="toast" class="toast" data-testid="toast"></div>
+  <script src="{{ url_for('static', filename='js/qrcode.min.js') }}"></script>
   <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>

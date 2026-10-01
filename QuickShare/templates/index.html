@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-lan-url="{{ lan_url }}" data-lan-ip="{{ lan_ip }}" data-public-url="{{ public_url }}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>QuickShare — Local Text & File Sharing</title>
+  <title>QuickShare — Local & Cross-Network Text & File Sharing</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236c8cff'/%3E%3Ctext x='16' y='23' font-size='20' font-family='sans-serif' font-weight='700' fill='white' text-anchor='middle'%3EQ%3C/text%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -22,16 +22,23 @@
     <nav class="topnav">
       <a href="/share" class="nav-link" data-testid="nav-share">Share</a>
       <a href="/retrieve" class="nav-link" data-testid="nav-retrieve">Retrieve</a>
+      <button class="btn ghost small nav-mobile-btn" id="btn-open-mobile-modal" data-testid="btn-connect-mobile" title="Connect your mobile phone via QR code">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+          <path d="M12 18h.01"/>
+        </svg>
+        <span>Connect Phone</span>
+      </button>
     </nav>
   </header>
 
   <main class="hero">
     <div class="hero-inner reveal">
-      <span class="pill" data-testid="hero-pill">Same Wi-Fi · No sign-up · Auto-expires</span>
-      <h1 class="hero-title">Share text &amp; files <span class="accent">instantly</span><br />across your local network.</h1>
+      <span class="pill" data-testid="hero-pill">🌐 Cross-Network &amp; Local Wi-Fi · QR Code Ready · Auto-expires</span>
+      <h1 class="hero-title">Share text &amp; files <span class="accent">instantly</span><br />across any network.</h1>
       <p class="hero-sub">
-        Paste text or drop a file on one device, get a 6-digit code, and pull it up on
-        another device on the same Wi-Fi. Fast, private, and gone in minutes.
+        Paste text or drop a file on your PC or phone, get a 6-digit code &amp; QR code, and pull it up on
+        another device over Wi-Fi or cross-network anywhere. Fast, private, and gone in minutes.
       </p>
 
       <div class="choice-grid">
@@ -40,7 +47,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
           </div>
           <h2>Share Something</h2>
-          <p>Send text or upload a file and get a code to hand over.</p>
+          <p>Send text or upload a file and get a code + QR to scan.</p>
           <span class="choice-go">Start sharing →</span>
         </a>
 
@@ -48,8 +55,8 @@
           <div class="choice-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
           </div>
-          <h2>Retrieve with Code</h2>
-          <p>Enter the 6-digit code to view text or download the file.</p>
+          <h2>Retrieve with Code / QR</h2>
+          <p>Enter the 6-digit code or scan the QR code with camera.</p>
           <span class="choice-go">Enter a code →</span>
         </a>
       </div>
@@ -57,18 +64,44 @@
       <div class="how">
         <div class="how-step"><span class="how-num">1</span><p>Paste text or pick a file</p></div>
         <div class="how-arrow">→</div>
-        <div class="how-step"><span class="how-num">2</span><p>Get a 6-digit code</p></div>
+        <div class="how-step"><span class="how-num">2</span><p>Get 6-digit code or QR code</p></div>
         <div class="how-arrow">→</div>
-        <div class="how-step"><span class="how-num">3</span><p>Enter it on the other device</p></div>
+        <div class="how-step"><span class="how-num">3</span><p>Scan with phone or enter code</p></div>
       </div>
     </div>
   </main>
 
+  <!-- Mobile Connect Modal -->
+  <div id="mobile-modal" class="modal-backdrop hidden" data-testid="mobile-modal">
+    <div class="modal-card">
+      <button class="modal-close" id="btn-close-mobile-modal" aria-label="Close modal">&times;</button>
+      <div class="choice-icon" style="margin: 0 auto 12px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
+      </div>
+      <h3 class="modal-title">Connect Your Phone</h3>
+      <p class="modal-sub">Scan this QR code with your phone camera to access QuickShare from anywhere.</p>
+      
+      <div class="network-pills" id="modal-net-toggle">
+        <button class="net-pill active" data-mode="public" id="btn-modal-net-public" type="button">🌐 Cross-Network</button>
+        <button class="net-pill" data-mode="lan" id="btn-modal-net-lan" type="button">📶 Local Wi-Fi</button>
+      </div>
+
+      <div class="qr-badge" id="mobile-connect-qr"></div>
+      
+      <div class="url-pill-box">
+        <span class="url-pill-text" id="mobile-lan-url">{{ public_url or lan_url }}</span>
+        <button class="btn ghost small" id="btn-copy-lan-url" style="padding: 4px 10px; font-size: 12px;">Copy</button>
+      </div>
+      <p class="hint" style="margin-top: 10px;" id="network-hint-text">Cross-network public URL enabled</p>
+    </div>
+  </div>
+
   <footer class="footer">
-    <p>Built for a Computer Networks lab · Flask + SQLite over HTTP/TCP · For trusted local networks only.</p>
+    <p>QuickShare · Instant, Private &amp; Auto-expiring text &amp; file transfer.</p>
   </footer>
 
   <div id="toast" class="toast" data-testid="toast"></div>
+  <script src="{{ url_for('static', filename='js/qrcode.min.js') }}"></script>
   <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>

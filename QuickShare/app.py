@@ -27,6 +27,7 @@ It is NOT production-grade cloud storage.
 import os
 import io
 import time
+import socket
 import sqlite3
 import secrets
 import mimetypes
@@ -35,7 +36,7 @@ from datetime import datetime, timezone, timedelta
 
 from flask import (
     Flask, request, jsonify, render_template,
-    send_file, abort, g,
+    send_file, abort, g, redirect, url_for,
 )
 from werkzeug.utils import secure_filename
 
@@ -54,12 +55,69 @@ MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+
+def get_local_ip():
+    """Discover the local LAN IPv4 address so phones on the same Wi-Fi can connect."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+    except Exception:
+        ip = "127.0.0.1"
+    finally:
+        s.close()
+    return ip
+
+
+PUBLIC_TUNNEL_URL = None
+TUNNEL_LOCK = threading.Lock()
+
+
+def start_public_tunnel(port):
+    """Starts Cloudflare Tunnel for seamless cross-network file sharing."""
+    global PUBLIC_TUNNEL_URL
+    try:
+        from pycloudflared import try_cloudflare
+        tunnel = try_cloudflare(port=port)
+        with TUNNEL_LOCK:
+            PUBLIC_TUNNEL_URL = tunnel.tunnel.rstrip("/")
+        print("\n========================================================")
+        print(" [CROSS-NETWORK PUBLIC URL] (Share Anywhere / 4G / 5G / Internet):")
+        print(f"    {PUBLIC_TUNNEL_URL}")
+        print("========================================================\n")
+    except Exception as e:
+        print(f" * Cross-network tunnel notice: {e}")
+
+
 # ---------------------------------------------------------------------------
 # Flask application object
 # ---------------------------------------------------------------------------
 app = Flask(__name__, template_folder="templates", static_folder="static")
 # Reject any request body larger than the limit -> Flask raises 413 for us.
 app.config["MAX_CONTENT_LENGTH"] = MAX_FILE_BYTES
+
+
+@app.after_request
+def add_cors_headers(response):
+    """Enable CORS so uploads and downloads work smoothly across all origins/tunnels."""
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Requested-With, Authorization"
+    return response
+
+
+@app.context_processor
+def inject_server_info():
+    ip = get_local_ip()
+    port = PORT
+    public_url = PUBLIC_TUNNEL_URL or f"http://{ip}:{port}"
+    return {
+        "lan_ip": ip,
+        "lan_url": f"http://{ip}:{port}",
+        "public_url": public_url,
+        "has_public_url": bool(PUBLIC_TUNNEL_URL),
+        "server_port": port,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -201,7 +259,15 @@ def share_page():
 
 @app.route("/retrieve")
 def retrieve_page():
-    return render_template("retrieve.html")
+    code = request.args.get("code", "").strip()
+    return render_template("retrieve.html", prefill_code=code)
+
+
+@app.route("/r/<code>")
+@app.route("/q/<code>")
+def quick_retrieve(code):
+    """Direct short link for QR code scanning -> redirects to retrieve page with code."""
+    return redirect(url_for("retrieve_page", code=code))
 
 
 # ---------------------------------------------------------------------------
@@ -213,9 +279,29 @@ def health():
     return jsonify(status="ok", service="QuickShare")
 
 
-@app.route("/api/share/text", methods=["POST"])
+@app.route("/api/info")
+@app.route("/api/network")
+def server_info():
+    """Return connection info for local Wi-Fi and global cross-network sharing."""
+    ip = get_local_ip()
+    return jsonify(
+        ip=ip,
+        port=PORT,
+        lan_url=f"http://{ip}:{PORT}",
+        public_url=PUBLIC_TUNNEL_URL,
+        has_public_url=bool(PUBLIC_TUNNEL_URL),
+        best_url=PUBLIC_TUNNEL_URL or f"http://{ip}:{PORT}",
+        max_file_mb=MAX_FILE_MB,
+        expiry_minutes=EXPIRY_MINUTES,
+    )
+
+
+@app.route("/api/share/text", methods=["POST", "OPTIONS"])
 def api_share_text():
     """CLIENT sends text (JSON) -> SERVER stores it and returns a 6-digit code."""
+    if request.method == "OPTIONS":
+        return "", 204
+
     data = request.get_json(silent=True) or {}
     text = (data.get("text") or "").strip()
 
@@ -239,27 +325,41 @@ def api_share_text():
     )
     db.commit()
 
+    ip = get_local_ip()
+    best_base = PUBLIC_TUNNEL_URL or f"http://{ip}:{PORT}"
     return jsonify(
         code=code,
         type="text",
         expires_at=iso(expires),
         expires_in_minutes=EXPIRY_MINUTES,
+        lan_url=f"http://{ip}:{PORT}",
+        public_url=PUBLIC_TUNNEL_URL,
+        retrieve_url=f"/retrieve?code={code}",
+        direct_url=f"{best_base}/retrieve?code={code}",
+        direct_lan_url=f"http://{ip}:{PORT}/retrieve?code={code}",
+        direct_public_url=f"{PUBLIC_TUNNEL_URL}/retrieve?code={code}" if PUBLIC_TUNNEL_URL else None,
     ), 201
 
 
-@app.route("/api/share/file", methods=["POST"])
+@app.route("/api/share/file", methods=["POST", "OPTIONS"])
 def api_share_file():
     """CLIENT uploads a file (multipart/form-data) -> SERVER saves it + returns a code."""
+    if request.method == "OPTIONS":
+        return "", 204
+
     if "file" not in request.files:
         return jsonify(error="No file part in the request."), 400
 
     upload = request.files["file"]
-    if not upload or upload.filename == "":
+    if not upload or not upload.filename:
         return jsonify(error="No file selected."), 400
 
     # --- Security: sanitize the filename to stop path-traversal (../../etc) ---
-    original_name = upload.filename
-    safe_name = secure_filename(original_name) or "upload.bin"
+    original_name = os.path.basename(upload.filename).strip() or "upload.bin"
+    safe_name = secure_filename(original_name)
+    if not safe_name:
+        ext = os.path.splitext(original_name)[1]
+        safe_name = f"upload_{secrets.token_hex(4)}{ext if ext else '.bin'}"
 
     # Store with a random prefix so two users uploading "photo.jpg" never clash.
     share_id = secrets.token_urlsafe(9)
@@ -274,7 +374,8 @@ def api_share_file():
     filesize = os.path.getsize(stored_path)
 
     if filesize == 0:
-        os.remove(stored_path)
+        if os.path.exists(stored_path):
+            os.remove(stored_path)
         return jsonify(error="Uploaded file is empty."), 400
 
     db = get_db()
@@ -292,6 +393,8 @@ def api_share_file():
     )
     db.commit()
 
+    ip = get_local_ip()
+    best_base = PUBLIC_TUNNEL_URL or f"http://{ip}:{PORT}"
     return jsonify(
         code=code,
         type="file",
@@ -300,12 +403,21 @@ def api_share_file():
         filesize_human=human_size(filesize),
         expires_at=iso(expires),
         expires_in_minutes=EXPIRY_MINUTES,
+        lan_url=f"http://{ip}:{PORT}",
+        public_url=PUBLIC_TUNNEL_URL,
+        retrieve_url=f"/retrieve?code={code}",
+        direct_url=f"{best_base}/retrieve?code={code}",
+        direct_lan_url=f"http://{ip}:{PORT}/retrieve?code={code}",
+        direct_public_url=f"{PUBLIC_TUNNEL_URL}/retrieve?code={code}" if PUBLIC_TUNNEL_URL else None,
     ), 201
 
 
-@app.route("/api/retrieve", methods=["POST"])
+@app.route("/api/retrieve", methods=["POST", "OPTIONS"])
 def api_retrieve():
     """CLIENT sends a 6-digit code -> SERVER returns the matching content/metadata."""
+    if request.method == "OPTIONS":
+        return "", 204
+
     data = request.get_json(silent=True) or {}
     code = (data.get("code") or "").strip()
 
@@ -412,6 +524,10 @@ def start_cleanup_thread():
 # (this works both for `python app.py` and when a WSGI server imports `app`).
 init_db()
 start_cleanup_thread()
+
+# Start the cross-network tunnel in background so it is available for internet sharing
+_tunnel_thread = threading.Thread(target=start_public_tunnel, args=(PORT,), daemon=True)
+_tunnel_thread.start()
 
 
 if __name__ == "__main__":
