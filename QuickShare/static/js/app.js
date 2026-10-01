@@ -1,7 +1,6 @@
 /* ================================================================
    QuickShare — client-side logic (vanilla JavaScript, no frameworks)
-   ----------------------------------------------------------------
-   Works over both local Wi-Fi / LAN and cross-network (Internet).
+   Mobile-First, Cross-Network & Local LAN Compatible
    ================================================================ */
 
 const API = {
@@ -77,7 +76,7 @@ function isCloudDomain() {
 }
 
 function getBaseUrl(mode = "public") {
-  // If hosted on a cloud domain (e.g. *.onrender.com, *.trycloudflare.com, etc.)
+  // If hosted on Render, Cloudflare, or any cloud domain
   if (isCloudDomain()) {
     return window.location.origin;
   }
@@ -95,14 +94,13 @@ function getBaseUrl(mode = "public") {
 }
 
 /**
- * Clean QR Code Renderer
- * Ensures only ONE single, crisp QR image is displayed with correct dimensions.
+ * Universal Mobile-Friendly QR Code Generator
+ * Ensures high contrast, zero duplicates, and instant rendering on all devices.
  */
 function renderQr(container, text, size = 150) {
   if (typeof container === "string") container = $(container);
   if (!container || typeof QRCode === "undefined") return;
   
-  // Empty container completely before rendering
   container.innerHTML = "";
 
   try {
@@ -110,10 +108,29 @@ function renderQr(container, text, size = 150) {
       text: text,
       width: size,
       height: size,
-      colorDark: "#0a0e1f",
+      colorDark: "#050814",
       colorLight: "#ffffff",
       correctLevel: QRCode.CorrectLevel.M,
     });
+
+    // Check next frame to guarantee 100% mobile visibility without duplication
+    setTimeout(() => {
+      const canvas = container.querySelector("canvas");
+      const img = container.querySelector("img");
+      if (canvas && img) {
+        if (img.src && img.src.startsWith("data:")) {
+          img.style.display = "block";
+          img.style.width = size + "px";
+          img.style.height = size + "px";
+          canvas.style.display = "none";
+        } else {
+          canvas.style.display = "block";
+          canvas.style.width = size + "px";
+          canvas.style.height = size + "px";
+          img.style.display = "none";
+        }
+      }
+    }, 40);
   } catch (err) {
     console.error("QR render error:", err);
   }
@@ -368,6 +385,7 @@ function initSharePage() {
   const resultExpiry = $("#result-expiry");
   const qrContainer = $("#share-qr-container");
   const copyLinkBtn = $("#btn-copy-link");
+  const nativeShareBtn = $("#btn-native-share");
   const downloadQrBtn = $("#btn-download-qr");
   const netToggle = $("#share-net-toggle");
   let countdownTimer = null;
@@ -376,6 +394,9 @@ function initSharePage() {
 
   function getShareUrl() {
     if (!currentShareData) return "";
+    if (isCloudDomain()) {
+      return `${window.location.origin}/retrieve?code=${currentShareData.code}`;
+    }
     const base = getBaseUrl(currentNetworkMode);
     return `${base}/retrieve?code=${currentShareData.code}`;
   }
@@ -468,12 +489,31 @@ function initSharePage() {
     });
   }
 
+  if (nativeShareBtn) {
+    nativeShareBtn.addEventListener("click", async () => {
+      const shareUrl = getShareUrl();
+      if (!shareUrl) return;
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: `QuickShare: Code ${codeDisplay.textContent}`,
+            text: `Retrieve my ${resultMeta.textContent || 'file'} with code ${codeDisplay.textContent}:`,
+            url: shareUrl,
+          });
+        } catch {}
+      } else {
+        const ok = await copyText(shareUrl);
+        toast(ok ? "Link copied!" : "Failed to copy.", ok ? "success" : "error");
+      }
+    });
+  }
+
   if (downloadQrBtn) {
     downloadQrBtn.addEventListener("click", () => {
       const img = qrContainer ? qrContainer.querySelector("img") : null;
       const canvas = qrContainer ? qrContainer.querySelector("canvas") : null;
       let dataUrl = "";
-      if (img && img.src) {
+      if (img && img.src && img.src.startsWith("data:")) {
         dataUrl = img.src;
       } else if (canvas) {
         dataUrl = canvas.toDataURL("image/png");
